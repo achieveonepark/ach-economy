@@ -1,0 +1,108 @@
+---
+title: API
+description: Economy 类与 EconomyConfig struct 的完整参考
+---
+
+## EconomyConfig
+
+承载所有调参值的值类型。从 `EconomyConfig.Default` 出发只覆盖你需要的字段。
+
+| 字段 | 默认值 | 说明 |
+|---|---|---|
+| `TickInterval` | `1` | 一次长期 tick 运行的模拟时间(秒) |
+| `PriceInertia` | `0.15` | 长期价格收敛到目标的速度(0~1)。**对称惯性** |
+| `DemandWeight` | `1` | 价格公式中需求项的权重 |
+| `ShortTermResponse` | `0.5` | 单笔交易拉动短期价格的强度(0~1) |
+| `ShortTermDecay` | `0.25` | 短期价格向长期价格均值回归的强度(0~1) |
+| `InflationSensitivity` | `0.1` | source/sink 压力影响通胀乘数的灵敏度。0 表示关闭 |
+| `MinPriceMultiplier` | `0.25` | 最终价格乘数下限 |
+| `MaxPriceMultiplier` | `4` | 最终价格乘数上限 |
+| `InflationAlertThreshold` | `0.2` | 超过此绝对压力时触发 `OnInflationAlert` |
+| `TradeFlowRate` | `0.1` | 每个 tick 从盈余→短缺节点移动的库存比例(0~1)。0 表示关闭 |
+
+## Economy
+
+动态经济的唯一入口(外观)。
+
+### 构造
+
+```csharp
+Economy(EconomyConfig config, bool autoTick = false)
+```
+
+当 `autoTick` 为 true 时，一个隐藏运行器每帧调用 `Tick`。关闭时需调用 `Dispose()`。
+
+### 注册
+
+| 方法 | 说明 |
+|---|---|
+| `AddCommodity(id, basePrice, targetStock, baseDemand = 0)` | 注册商品定义 |
+| `AddMarket(id, initialStock = null)` | 注册市场(节点)。可指定初始库存 |
+| `AddRecipe(marketId, inputs, outputs, throughput = 1)` | 生产/消费配方。`outputs` 为空则为纯消费 |
+| `AddTradeRoute(marketA, marketB)` | 用贸易路线连接两个节点 |
+
+### 交易(通胀中立)
+
+| 方法 | 返回 | 说明 |
+|---|---|---|
+| `Buy(marketId, commodityId, quantity)` | `TradeResult` | 玩家买入。库存不足时部分成交 |
+| `Sell(marketId, commodityId, quantity)` | `TradeResult` | 玩家卖出 |
+
+### source / sink(引发通胀)
+
+| 方法 | 说明 |
+|---|---|
+| `Inject(commodityId, amount, tag = null)` | 物资从无中生成(faucet)。`tag` 是遥测标签 |
+| `Consume(commodityId, amount, tag = null)` | 物资被永久移除(sink) |
+
+### 查询
+
+| 方法 | 返回 | 说明 |
+|---|---|---|
+| `GetPrice(marketId, commodityId)` | `float` | 当前单价(已反映供需与通胀乘数) |
+| `GetStock(marketId, commodityId)` | `float` | 当前库存 |
+| `GetInflationMultiplier(commodityId)` | `float` | 全局通胀乘数(1=中性，&lt;1 过剩，&gt;1 稀缺) |
+| `GetSinkFaucetRatio(commodityId)` | `float` | sink/faucet 比率。大于 1 表示 sink 占优 |
+
+### Tick
+
+```csharp
+void Tick(float deltaTime)
+```
+
+每当累积时间达到 `TickInterval`，运行一次长期 tick(生产 → 贸易 → 价格收敛 → 通胀更新)。
+
+### 事件
+
+| 事件 | 签名 | 触发时机 |
+|---|---|---|
+| `OnPriceChanged` | `(market, commodity, newPrice)` | 单价更新 |
+| `OnStockChanged` | `(market, commodity, newStock)` | 库存变动 |
+| `OnTradeExecuted` | `(TradeResult)` | 交易成交 |
+| `OnInflationAlert` | `(commodity, pressure)` | 压力超过阈值 |
+| `OnDailyTick` | `()` | 一次长期 tick 完成 |
+
+## TradeResult
+
+`Buy`/`Sell` 的结果。失败也不抛异常，而是以 `Success == false` 返回。
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `Success` | `bool` | 是否成交 |
+| `Market` / `Commodity` | `string` | 目标节点/商品 id |
+| `Quantity` | `float` | 实际成交数量 |
+| `UnitPrice` | `float` | 成交单价 |
+| `TotalCost` | `float` | 总额 |
+| `StockAfter` | `float` | 交易后库存 |
+| `Reason` | `string` | 失败原因(成功时为空字符串) |
+
+## 价格公式
+
+```text
+平衡乘数 = (目标库存 + 需求 + 1) / (当前库存 + 需求 + 1)
+最终价格 = 基准价 × clamp(短期乘数 × 通胀乘数, Min, Max)
+```
+
+- **短期乘数**：每笔交易按 `ShortTermResponse` 即时移向平衡值
+- **长期乘数**：每个 tick 按 `PriceInertia` 对称收敛到平衡值，短期向长期均值回归
+- **通胀乘数**：由 source/sink 净压力更新 —— 净生成则小于 1(更便宜)，净消除则大于 1(更贵)

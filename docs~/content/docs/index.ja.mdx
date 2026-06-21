@@ -1,0 +1,57 @@
+---
+title: 概要
+description: 需給による動的価格と source/sink のインフレ管理をまとめて扱う、再利用可能な Unity 経済シミュレーションパッケージ
+---
+
+## Ach Economy とは
+
+**Ach Economy** は、店の価格や在庫が固定値ではなく生産・消費・プレイヤーの売買によって変動する経済を、再利用可能な Unity パッケージにまとめたものです。
+
+`EconomyConfig` を一つ渡すだけで、`Economy` クラスの中で **価格決定・拠点間貿易・生産消費・インフレ計測** がすべて自動で回ります。ScriptableObject も、シーンに付けるコンポーネントも不要です。
+
+```csharp
+var economy = new Economy(EconomyConfig.Default);
+economy.AddCommodity("wheat", basePrice: 10f, targetStock: 100f);
+economy.AddMarket("town_a", new() { ["wheat"] = 200f });
+
+var r = economy.Buy("town_a", "wheat", 10);   // 在庫 ↓ → 価格 ↑
+```
+
+## 二つの層
+
+動的経済は性質の異なる二つの層に分かれます。一塊として扱うと設計が絡まります。
+
+<Cards>
+  <Card title="ミクロ — 価格決定" href="/ja/getting-started">
+    単一市場の需給で価格・在庫が動きます。貿易・ショップコンテンツの中核。
+  </Card>
+  <Card title="マクロ — インフレ" href="/ja/api">
+    経済全体に通貨・財がどれだけ入り(source)抜けるか(sink)。ライブサービスの中核。
+  </Card>
+</Cards>
+
+Ach Economy はこの二つを一つの `Economy` ファサードの裏に隠し、ユーザーには **`EconomyConfig` struct と `Economy` class** の二つだけを公開します。
+
+## 主な特徴
+
+| 特徴 | 説明 |
+|---|---|
+| **短期/長期価格の分離** | 短期価格は取引ごと、長期価格はティックごとに対称慣性で収束 |
+| **対称慣性** | 上げも下げも同じ速度 → 大量売却後の翌日買いの裁定エクスプロイトを防止 |
+| **拠点間貿易** | 貿易路でつながったノード間で在庫が平準化(裁定取引を自動模擬) |
+| **生産消費ループ** | レシピが入力を出力に変え、需給の数値を満たす |
+| **source/sink 計測** | `Inject`/`Consume` で faucet/drain を記録し、インフレ圧力を算出 |
+
+## インストール
+
+Unity Package Manager で **Add package from git URL...** を選び、以下のアドレスを入力します。
+
+```text
+https://github.com/achieveonepark/ach-economy.git
+```
+
+<Callout type="info">
+特定バージョンを固定するには、リリースタグを push してから `...ach-economy.git#1.0.0` のようにタグを付けます。OpenUPM への登録はまだ行われていません。
+</Callout>
+
+次は [はじめに](/ja/getting-started) で最初の経済を作ってみましょう。

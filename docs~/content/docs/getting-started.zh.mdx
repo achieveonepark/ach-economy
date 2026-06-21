@@ -1,0 +1,94 @@
+---
+title: 快速开始
+description: 用 EconomyConfig 构建第一个经济，并运行交易、生产、贸易与通胀
+---
+
+## 1. 创建经济
+
+你需要打交道的类型只有 `EconomyConfig`(struct)和 `Economy`(class)两个。
+
+```csharp
+using AchEconomy;
+
+// 从默认值出发，只覆盖你需要的字段。
+var config = EconomyConfig.Default;
+config.TickInterval = 2f;   // 每 2 秒一次长期 tick
+config.PriceInertia = 0.2f;
+
+var economy = new Economy(config);
+```
+
+## 2. 注册商品与市场
+
+```csharp
+economy.AddCommodity("wheat", basePrice: 10f, targetStock: 100f, baseDemand: 5f);
+economy.AddCommodity("cloth", basePrice: 40f, targetStock: 30f);
+
+economy.AddMarket("village", new() { ["wheat"] = 250f });
+economy.AddMarket("town",    new() { ["wheat"] = 20f, ["cloth"] = 40f });
+```
+
+`basePrice` 是库存与 `targetStock` 平衡时的价格。库存低于目标则更贵，高于目标则更便宜。
+
+## 3. 交易
+
+交易是 **物资的移动**，因此对通胀中立。
+
+```csharp
+var r = economy.Buy("town", "cloth", 5f);
+// r.UnitPrice, r.TotalCost, r.StockAfter, r.Success
+
+float price = economy.GetPrice("town", "cloth");  // 库存减少后略有上涨的值
+```
+
+<Callout type="info">
+若库存不足，会 **部分成交** 而非抛出异常。用 `r.Success` 和 `r.Quantity` 确认实际成交量。
+</Callout>
+
+## 4. 生产消费循环
+
+配方在每个长期 tick 把输入商品转为输出商品。输出为空时则作为纯消费(例如人口吃掉食物)。
+
+```csharp
+// 城镇消耗 3 小麦生产 1 布，每 tick 运行 2 次
+economy.AddRecipe("town",
+    inputs:  new[] { ("wheat", 3f) },
+    outputs: new[] { ("cloth", 1f) },
+    throughput: 2f);
+```
+
+## 5. 节点间贸易
+
+通过贸易路线连接的节点之间库存会均衡，从盈余节点流向短缺节点——模拟 AI 商队的套利。
+
+```csharp
+economy.AddTradeRoute("village", "town");
+// 切断路线(不连接)则节点间价格会分化 —— 有意为之的因果
+```
+
+## 6. 通胀管理(source / sink)
+
+只需告诉它物资何时 **从无中生成**(faucet)或 **被永久移除**(sink)，通胀校正会在内部自动进行。
+
+```csharp
+economy.Inject("wheat", 100f, tag: "daily_quest"); // 任务奖励 = faucet
+economy.Consume("wheat", 30f, tag: "crafting");    // 制作消耗 = sink
+
+// 仅在你关心时订阅(可忽略)
+economy.OnInflationAlert += (commodity, pressure) =>
+    Debug.Log($"{commodity} 通胀压力 {pressure:P0}");
+```
+
+## 7. 推进时间
+
+```csharp
+void Update() => economy.Tick(Time.deltaTime);
+```
+
+<Callout type="warn">
+若在多人(锁步 / Quantum 等)中需要确定性，请使用 **手动 `Tick` + 方程式** 的方式。`Tick` 对相同输入产生相同结果。
+</Callout>
+
+若觉得自动 tick 更方便，`new Economy(config, autoTick: true)` 会让一个隐藏运行器每帧调用 `Tick`。这种情况下请在关闭时调用 `economy.Dispose()` 清理它。
+
+完整 API 请参阅 [API 参考](/zh/api)。

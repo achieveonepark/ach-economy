@@ -1,0 +1,108 @@
+---
+title: API
+description: Full reference for the Economy class and EconomyConfig struct
+---
+
+## EconomyConfig
+
+The value type holding all tuning values. Override only the fields you need from `EconomyConfig.Default`.
+
+| Field | Default | Description |
+|---|---|---|
+| `TickInterval` | `1` | Simulation time (seconds) for one long tick |
+| `PriceInertia` | `0.15` | Speed the long-term price converges to its target (0~1). **Symmetric inertia** |
+| `DemandWeight` | `1` | Weight of the demand term in the price formula |
+| `ShortTermResponse` | `0.5` | How strongly a single trade pulls the short-term price (0~1) |
+| `ShortTermDecay` | `0.25` | How strongly the short-term price mean-reverts to the long-term price (0~1) |
+| `InflationSensitivity` | `0.1` | Sensitivity of source/sink pressure on the inflation multiplier. 0 disables it |
+| `MinPriceMultiplier` | `0.25` | Lower bound of the final price multiplier |
+| `MaxPriceMultiplier` | `4` | Upper bound of the final price multiplier |
+| `InflationAlertThreshold` | `0.2` | `OnInflationAlert` fires above this absolute pressure |
+| `TradeFlowRate` | `0.1` | Fraction of stock moved from surplus→deficit nodes each tick (0~1). 0 disables it |
+
+## Economy
+
+The single entry point (facade) of the dynamic economy.
+
+### Construction
+
+```csharp
+Economy(EconomyConfig config, bool autoTick = false)
+```
+
+When `autoTick` is true, a hidden runner calls `Tick` every frame. Call `Dispose()` on shutdown.
+
+### Registration
+
+| Method | Description |
+|---|---|
+| `AddCommodity(id, basePrice, targetStock, baseDemand = 0)` | Register a commodity definition |
+| `AddMarket(id, initialStock = null)` | Register a market (node). Initial stock optional |
+| `AddRecipe(marketId, inputs, outputs, throughput = 1)` | Production/consumption recipe. Empty `outputs` = pure consumption |
+| `AddTradeRoute(marketA, marketB)` | Connect two nodes with a trade route |
+
+### Trading (inflation-neutral)
+
+| Method | Returns | Description |
+|---|---|---|
+| `Buy(marketId, commodityId, quantity)` | `TradeResult` | Player buys. Partial fill if stock is short |
+| `Sell(marketId, commodityId, quantity)` | `TradeResult` | Player sells |
+
+### source / sink (causes inflation)
+
+| Method | Description |
+|---|---|
+| `Inject(commodityId, amount, tag = null)` | Goods created from nothing (faucet). `tag` is a telemetry label |
+| `Consume(commodityId, amount, tag = null)` | Goods permanently removed (sink) |
+
+### Queries
+
+| Method | Returns | Description |
+|---|---|---|
+| `GetPrice(marketId, commodityId)` | `float` | Current unit price (supply/demand + inflation multiplier applied) |
+| `GetStock(marketId, commodityId)` | `float` | Current stock |
+| `GetInflationMultiplier(commodityId)` | `float` | Global inflation multiplier (1 = neutral, &lt;1 surplus, &gt;1 scarce) |
+| `GetSinkFaucetRatio(commodityId)` | `float` | sink/faucet ratio. Above 1 means sink dominates |
+
+### Tick
+
+```csharp
+void Tick(float deltaTime)
+```
+
+Each time accumulated time reaches `TickInterval`, runs a long tick (production → trade → price convergence → inflation update).
+
+### Events
+
+| Event | Signature | When |
+|---|---|---|
+| `OnPriceChanged` | `(market, commodity, newPrice)` | Unit price updated |
+| `OnStockChanged` | `(market, commodity, newStock)` | Stock changed |
+| `OnTradeExecuted` | `(TradeResult)` | Trade settled |
+| `OnInflationAlert` | `(commodity, pressure)` | Pressure exceeds the threshold |
+| `OnDailyTick` | `()` | One long tick completed |
+
+## TradeResult
+
+The result of `Buy`/`Sell`. On failure it returns with `Success == false` instead of throwing.
+
+| Field | Type | Description |
+|---|---|---|
+| `Success` | `bool` | Whether it settled |
+| `Market` / `Commodity` | `string` | Target node/commodity id |
+| `Quantity` | `float` | Actual filled quantity |
+| `UnitPrice` | `float` | Settled unit price |
+| `TotalCost` | `float` | Total amount |
+| `StockAfter` | `float` | Stock after the trade |
+| `Reason` | `string` | Failure reason (empty string on success) |
+
+## Price formula
+
+```text
+balance multiplier = (targetStock + demand + 1) / (currentStock + demand + 1)
+final price        = basePrice × clamp(shortMul × inflationMul, Min, Max)
+```
+
+- **Short multiplier**: moves to the balance value by `ShortTermResponse` on each trade
+- **Long multiplier**: converges symmetrically to the balance value by `PriceInertia` each tick; short mean-reverts to long
+- **Inflation multiplier**: updated by net source/sink pressure — net creation < 1 (cheaper), net removal > 1 (pricier)

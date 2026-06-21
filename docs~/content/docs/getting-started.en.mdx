@@ -1,0 +1,94 @@
+---
+title: Getting Started
+description: Build your first economy with EconomyConfig and run trading, production, trade, and inflation
+---
+
+## 1. Create the economy
+
+The only types you touch are `EconomyConfig` (struct) and `Economy` (class).
+
+```csharp
+using AchEconomy;
+
+// Override only what you need from the defaults.
+var config = EconomyConfig.Default;
+config.TickInterval = 2f;   // long tick every 2 seconds
+config.PriceInertia = 0.2f;
+
+var economy = new Economy(config);
+```
+
+## 2. Register commodities and markets
+
+```csharp
+economy.AddCommodity("wheat", basePrice: 10f, targetStock: 100f, baseDemand: 5f);
+economy.AddCommodity("cloth", basePrice: 40f, targetStock: 30f);
+
+economy.AddMarket("village", new() { ["wheat"] = 250f });
+economy.AddMarket("town",    new() { ["wheat"] = 20f, ["cloth"] = 40f });
+```
+
+`basePrice` is the price when stock is balanced with `targetStock`. Below the target it gets more expensive; above it, cheaper.
+
+## 3. Trading
+
+A trade is a **movement of goods**, so it is inflation-neutral.
+
+```csharp
+var r = economy.Buy("town", "cloth", 5f);
+// r.UnitPrice, r.TotalCost, r.StockAfter, r.Success
+
+float price = economy.GetPrice("town", "cloth");  // slightly higher as stock dropped
+```
+
+<Callout type="info">
+If stock is insufficient, it **fills partially** instead of throwing. Check the actual filled amount with `r.Success` and `r.Quantity`.
+</Callout>
+
+## 4. Production/consumption loop
+
+A recipe turns input commodities into outputs each long tick. With empty outputs it acts as pure consumption (e.g. population eating food).
+
+```csharp
+// Town consumes 3 wheat to produce 1 cloth, 2 runs per tick
+economy.AddRecipe("town",
+    inputs:  new[] { ("wheat", 3f) },
+    outputs: new[] { ("cloth", 1f) },
+    throughput: 2f);
+```
+
+## 5. Inter-node trade
+
+Stock equalizes between nodes connected by a trade route, flowing from surplus to deficit nodes — simulating AI caravan arbitrage.
+
+```csharp
+economy.AddTradeRoute("village", "town");
+// Cut the route (don't connect) and prices diverge between nodes — intended causality
+```
+
+## 6. Inflation management (source / sink)
+
+Just tell it when goods are **created from nothing** (faucet) or **permanently removed** (sink), and inflation correction happens automatically inside.
+
+```csharp
+economy.Inject("wheat", 100f, tag: "daily_quest"); // quest reward = faucet
+economy.Consume("wheat", 30f, tag: "crafting");    // crafting cost = sink
+
+// Subscribe only if you care (safe to ignore)
+economy.OnInflationAlert += (commodity, pressure) =>
+    Debug.Log($"{commodity} inflation pressure {pressure:P0}");
+```
+
+## 7. Advancing time
+
+```csharp
+void Update() => economy.Tick(Time.deltaTime);
+```
+
+<Callout type="warn">
+If you need determinism in multiplayer (lockstep / Quantum, etc.), use **manual `Tick` + equation-based** simulation. `Tick` produces the same result for the same input.
+</Callout>
+
+If auto-tick is more convenient, `new Economy(config, autoTick: true)` makes a hidden runner call `Tick` every frame. In that case, call `economy.Dispose()` on shutdown to clean it up.
+
+See the [API reference](/en/api) for the full surface.

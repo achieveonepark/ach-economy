@@ -1,0 +1,94 @@
+---
+title: はじめに
+description: EconomyConfig で最初の経済を作り、取引・生産・貿易・インフレを回してみます
+---
+
+## 1. 経済を作る
+
+ユーザーが扱う型は `EconomyConfig`(struct)と `Economy`(class)の二つだけです。
+
+```csharp
+using AchEconomy;
+
+// デフォルトから必要なものだけ上書きする。
+var config = EconomyConfig.Default;
+config.TickInterval = 2f;   // 2秒ごとに長期ティック
+config.PriceInertia = 0.2f;
+
+var economy = new Economy(config);
+```
+
+## 2. 商品と市場の登録
+
+```csharp
+economy.AddCommodity("wheat", basePrice: 10f, targetStock: 100f, baseDemand: 5f);
+economy.AddCommodity("cloth", basePrice: 40f, targetStock: 30f);
+
+economy.AddMarket("village", new() { ["wheat"] = 250f });
+economy.AddMarket("town",    new() { ["wheat"] = 20f, ["cloth"] = 40f });
+```
+
+`basePrice` は在庫が `targetStock` と均衡しているときの価格です。適正値より在庫が少なければ高く、多ければ安くなります。
+
+## 3. 取引する
+
+取引は **財の移動** なのでインフレに中立です。
+
+```csharp
+var r = economy.Buy("town", "cloth", 5f);
+// r.UnitPrice, r.TotalCost, r.StockAfter, r.Success
+
+float price = economy.GetPrice("town", "cloth");  // 在庫が減って少し上がった値
+```
+
+<Callout type="info">
+在庫が足りない場合は例外ではなく **部分約定** になります。実際の約定量は `r.Success` と `r.Quantity` で確認してください。
+</Callout>
+
+## 4. 生産消費ループ
+
+レシピは長期ティックごとに入力商品を出力商品へ変換します。出力が空なら純粋な消費(人口が食料を食べるなど)になります。
+
+```csharp
+// 都市が小麦3を消費して布1を生産、ティックあたり2回稼働
+economy.AddRecipe("town",
+    inputs:  new[] { ("wheat", 3f) },
+    outputs: new[] { ("cloth", 1f) },
+    throughput: 2f);
+```
+
+## 5. 拠点間貿易
+
+貿易路でつながったノード間で在庫が平準化されます。余剰ノードから不足ノードへ流れ、AI キャラバンの裁定取引を模擬します。
+
+```csharp
+economy.AddTradeRoute("village", "town");
+// 貿易路を断つ(つながない)とノード間で価格が乖離します — 意図された因果
+```
+
+## 6. インフレ管理(source / sink)
+
+財が **無から生成** される(faucet)か **恒久的に消滅** する(sink)ときだけ伝えれば、インフレ補正は内部で自動的に行われます。
+
+```csharp
+economy.Inject("wheat", 100f, tag: "daily_quest"); // クエスト報酬 = faucet
+economy.Consume("wheat", 30f, tag: "crafting");    // クラフト消費 = sink
+
+// 知りたいときだけ購読(無視してよい)
+economy.OnInflationAlert += (commodity, pressure) =>
+    Debug.Log($"{commodity} インフレ圧力 {pressure:P0}");
+```
+
+## 7. 時間を進める
+
+```csharp
+void Update() => economy.Tick(Time.deltaTime);
+```
+
+<Callout type="warn">
+マルチプレイ(ロックステップ / Quantum など)で決定性が必要なら、**手動 `Tick` + 方程式ベース** を使ってください。`Tick` は同じ入力に同じ結果を返します。
+</Callout>
+
+自動ティックが便利なら `new Economy(config, autoTick: true)` にすると隠しランナーが毎フレーム `Tick` を呼びます。その場合は終了時に `economy.Dispose()` でランナーを片付けてください。
+
+全 API は [API リファレンス](/ja/api) を参照してください。

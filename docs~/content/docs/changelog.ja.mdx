@@ -1,0 +1,20 @@
+---
+title: 変更履歴
+description: Ach Economy のバージョンごとの主な変更点
+---
+
+このプロジェクトの主な変更点を記録します。形式は [Keep a Changelog](https://keepachangelog.com/ja/1.0.0/) に従い、バージョンは [Semantic Versioning](https://semver.org/lang/ja/) に従います。
+
+## [1.0.0] - 2026-06-21
+
+### Added
+
+- `Economy` ファサード: 価格決定・貿易・生産・インフレを一つの入口に統合
+- `EconomyConfig` struct: すべてのチューニング値を一つの値型に外部化
+- 需給による価格決定 — 短期/長期の分離、対称慣性で裁定エクスプロイトを防止
+- 拠点間貿易フロー — 貿易路ベースの在庫平準化
+- 生産消費ループ — レシピで入力を出力へ変換
+- source/sink インフレ計測 — `Inject`/`Consume`、インフレ倍率・アラート
+- 任意の自動ティックランナー(`autoTick: true`)
+- EditMode テスト(価格式の決定性・対称慣性・インフレ圧力)
+- 最小利用サンプル(`Samples~/Basic Usage`)

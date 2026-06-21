@@ -1,0 +1,20 @@
+---
+title: 更新日志
+description: Ach Economy 各版本的主要变更
+---
+
+本文件记录项目的主要变更。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
+
+## [1.0.0] - 2026-06-21
+
+### Added
+
+- `Economy` 外观：把价格决定、贸易、生产、通胀统一到一个入口
+- `EconomyConfig` struct：把所有调参值外部化为一个值类型
+- 供需价格决定 —— 短期/长期分离，对称惯性阻止套利漏洞
+- 节点间贸易流 —— 基于贸易路线的库存均衡
+- 生产消费循环 —— 用配方把输入转为输出
+- source/sink 通胀计量 —— `Inject`/`Consume`、通胀乘数与告警
+- 可选的自动 tick 运行器(`autoTick: true`)
+- EditMode 测试(价格公式确定性、对称惯性、通胀压力)
+- 最小使用示例(`Samples~/Basic Usage`)

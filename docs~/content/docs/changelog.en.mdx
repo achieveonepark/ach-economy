@@ -1,0 +1,20 @@
+---
+title: Changelog
+description: Notable changes to Ach Economy by version
+---
+
+This file records notable changes to the project. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and versioning follows [Semantic Versioning](https://semver.org/).
+
+## [1.0.0] - 2026-06-21
+
+### Added
+
+- `Economy` facade: pricing, trade, production, and inflation unified behind one entry point
+- `EconomyConfig` struct: all tuning values externalized into a single value type
+- Supply-demand price discovery — short/long split, symmetric inertia to block the arbitrage exploit
+- Inter-node trade flow — trade-route-based stock equalization
+- Production/consumption loop — recipes convert inputs into outputs
+- source/sink inflation metering — `Inject`/`Consume`, inflation multiplier and alerts
+- Optional auto-tick runner (`autoTick: true`)
+- EditMode tests (price formula determinism, symmetric inertia, inflation pressure)
+- Basic usage sample (`Samples~/Basic Usage`)

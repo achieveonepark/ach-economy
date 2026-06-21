@@ -1,0 +1,108 @@
+---
+title: API
+description: Economy クラスと EconomyConfig struct の完全リファレンス
+---
+
+## EconomyConfig
+
+すべてのチューニング値を保持する値型。`EconomyConfig.Default` から必要なフィールドだけ上書きします。
+
+| フィールド | 既定値 | 説明 |
+|---|---|---|
+| `TickInterval` | `1` | 長期ティック1回が回るシミュレーション時間(秒) |
+| `PriceInertia` | `0.15` | 長期価格が目標へ収束する速度(0~1)。**対称慣性** |
+| `DemandWeight` | `1` | 価格式の需要成分の重み |
+| `ShortTermResponse` | `0.5` | 1回の取引が短期価格を引き寄せる強さ(0~1) |
+| `ShortTermDecay` | `0.25` | 短期価格が長期価格へ平均回帰する強さ(0~1) |
+| `InflationSensitivity` | `0.1` | source/sink 圧力がインフレ倍率を動かす感度。0で無効 |
+| `MinPriceMultiplier` | `0.25` | 最終価格倍率の下限 |
+| `MaxPriceMultiplier` | `4` | 最終価格倍率の上限 |
+| `InflationAlertThreshold` | `0.2` | この絶対圧力を超えると `OnInflationAlert` が発火 |
+| `TradeFlowRate` | `0.1` | ティックごとに余剰→不足ノードへ移動する在庫比率(0~1)。0で無効 |
+
+## Economy
+
+動的経済の唯一の入口(ファサード)。
+
+### 生成
+
+```csharp
+Economy(EconomyConfig config, bool autoTick = false)
+```
+
+`autoTick` が true なら隠しランナーが毎フレーム `Tick` を呼びます。終了時に `Dispose()` が必要。
+
+### 登録
+
+| メソッド | 説明 |
+|---|---|
+| `AddCommodity(id, basePrice, targetStock, baseDemand = 0)` | 商品定義を登録 |
+| `AddMarket(id, initialStock = null)` | 市場(ノード)を登録。初期在庫を指定可能 |
+| `AddRecipe(marketId, inputs, outputs, throughput = 1)` | 生産/消費レシピ。`outputs` が空なら純粋な消費 |
+| `AddTradeRoute(marketA, marketB)` | 2つのノードを貿易路で接続 |
+
+### 取引(インフレ中立)
+
+| メソッド | 戻り値 | 説明 |
+|---|---|---|
+| `Buy(marketId, commodityId, quantity)` | `TradeResult` | プレイヤーが購入。在庫不足時は部分約定 |
+| `Sell(marketId, commodityId, quantity)` | `TradeResult` | プレイヤーが売却 |
+
+### source / sink(インフレを生む)
+
+| メソッド | 説明 |
+|---|---|
+| `Inject(commodityId, amount, tag = null)` | 財が無から生成される(faucet)。`tag` はテレメトリ用ラベル |
+| `Consume(commodityId, amount, tag = null)` | 財が恒久的に消滅する(sink) |
+
+### 取得
+
+| メソッド | 戻り値 | 説明 |
+|---|---|---|
+| `GetPrice(marketId, commodityId)` | `float` | 現在の単価(需給・インフレ倍率を反映) |
+| `GetStock(marketId, commodityId)` | `float` | 現在の在庫 |
+| `GetInflationMultiplier(commodityId)` | `float` | グローバルインフレ倍率(1=中立、&lt;1 過剰、&gt;1 希少) |
+| `GetSinkFaucetRatio(commodityId)` | `float` | sink/faucet 比率。1より大きいと sink 優勢 |
+
+### ティック
+
+```csharp
+void Tick(float deltaTime)
+```
+
+累積時間が `TickInterval` に達するたびに長期ティック(生産 → 貿易 → 価格収束 → インフレ更新)を回します。
+
+### イベント
+
+| イベント | シグネチャ | 発火タイミング |
+|---|---|---|
+| `OnPriceChanged` | `(market, commodity, newPrice)` | 単価更新時 |
+| `OnStockChanged` | `(market, commodity, newStock)` | 在庫変動時 |
+| `OnTradeExecuted` | `(TradeResult)` | 取引約定時 |
+| `OnInflationAlert` | `(commodity, pressure)` | 圧力が閾値を超過時 |
+| `OnDailyTick` | `()` | 長期ティック1回完了時 |
+
+## TradeResult
+
+`Buy`/`Sell` の結果。失敗しても例外を投げず `Success == false` で返ります。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `Success` | `bool` | 約定したか |
+| `Market` / `Commodity` | `string` | 対象ノード/商品 id |
+| `Quantity` | `float` | 実際の約定数量 |
+| `UnitPrice` | `float` | 約定単価 |
+| `TotalCost` | `float` | 総額 |
+| `StockAfter` | `float` | 取引後の在庫 |
+| `Reason` | `string` | 失敗理由(成功時は空文字列) |
+
+## 価格式
+
+```text
+均衡倍率 = (適正在庫 + 需要 + 1) / (現在在庫 + 需要 + 1)
+最終価格 = 基準価格 × clamp(短期倍率 × インフレ倍率, Min, Max)
+```
+
+- **短期倍率**: 取引ごとに `ShortTermResponse` の分だけ均衡値へ即時移動
+- **長期倍率**: ティックごとに `PriceInertia` の分だけ均衡値へ対称収束し、短期は長期へ平均回帰
+- **インフレ倍率**: source/sink の正味圧力で更新 — 正味生成なら1未満(安く)、正味消滅なら1超(高く)

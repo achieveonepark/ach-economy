@@ -1,0 +1,57 @@
+---
+title: 简介
+description: 一次性处理供需动态定价与 source/sink 通胀管理的可复用 Unity 经济模拟包
+---
+
+## 什么是 Ach Economy
+
+**Ach Economy** 把一个活的经济——商店价格与库存不是固定值，而是随生产、消费、玩家交易而波动——封装成可复用的 Unity 包。
+
+只需传入一个 `EconomyConfig`，`Economy` 类内部就会自动运行 **价格决定、节点间贸易、生产消费、通胀计量**。无需 ScriptableObject，也无需挂在场景上的组件。
+
+```csharp
+var economy = new Economy(EconomyConfig.Default);
+economy.AddCommodity("wheat", basePrice: 10f, targetStock: 100f);
+economy.AddMarket("town_a", new() { ["wheat"] = 200f });
+
+var r = economy.Buy("town_a", "wheat", 10);   // 库存 ↓ → 价格 ↑
+```
+
+## 两个层次
+
+动态经济分为性质不同的两个层次。混为一谈会让设计纠缠不清。
+
+<Cards>
+  <Card title="微观 — 价格决定" href="/zh/getting-started">
+    单一市场的供需驱动价格与库存。贸易与商店内容的核心。
+  </Card>
+  <Card title="宏观 — 通胀" href="/zh/api">
+    多少货币/物资进入(source)与离开(sink)整个经济。直播服务的核心。
+  </Card>
+</Cards>
+
+Ach Economy 把这两者藏在一个 `Economy` 外观之后，只向你暴露两样东西：**`EconomyConfig` struct 与 `Economy` class**。
+
+## 核心特性
+
+| 特性 | 说明 |
+|---|---|
+| **短期/长期价格分离** | 短期价格随每笔交易反应，长期价格每个 tick 以对称惯性收敛 |
+| **对称惯性** | 上涨与下跌同速 → 阻止「抛售后次日买入」的套利漏洞 |
+| **节点间贸易** | 通过贸易路线连接的节点之间库存均衡(自动模拟套利) |
+| **生产消费循环** | 配方把输入转为输出，填充供需数值 |
+| **source/sink 计量** | 用 `Inject`/`Consume` 记录 faucet/drain，推导通胀压力 |
+
+## 安装
+
+在 Unity Package Manager 中选择 **Add package from git URL...**，输入下面的地址。
+
+```text
+https://github.com/achieveonepark/ach-economy.git
+```
+
+<Callout type="info">
+若要锁定特定版本，推送一个发布标签后像 `...ach-economy.git#1.0.0` 这样附上标签即可。OpenUPM 注册尚未进行。
+</Callout>
+
+接下来前往 [快速开始](/zh/getting-started) 构建你的第一个经济。

@@ -1,0 +1,57 @@
+---
+title: Introduction
+description: A reusable Unity economy simulation package handling supply-demand dynamic pricing and source/sink inflation management in one
+---
+
+## What is Ach Economy?
+
+**Ach Economy** packages a living economy — where shop prices and stock are not fixed values but shift with production, consumption, and player trading — into a reusable Unity package.
+
+Pass a single `EconomyConfig` and the `Economy` class runs **pricing, inter-node trade, production/consumption, and inflation tracking** entirely on its own. No ScriptableObjects, no components to attach to a scene.
+
+```csharp
+var economy = new Economy(EconomyConfig.Default);
+economy.AddCommodity("wheat", basePrice: 10f, targetStock: 100f);
+economy.AddMarket("town_a", new() { ["wheat"] = 200f });
+
+var r = economy.Buy("town_a", "wheat", 10);   // stock ↓ → price ↑
+```
+
+## Two layers
+
+A dynamic economy splits into two layers of different character. Treating them as one tangles the design.
+
+<Cards>
+  <Card title="Micro — price discovery" href="/en/getting-started">
+    Price and stock move from a single market's supply/demand. The core of trade and shop content.
+  </Card>
+  <Card title="Macro — inflation" href="/en/api">
+    How much currency/goods enter (source) and leave (sink) the whole economy. The core of live service.
+  </Card>
+</Cards>
+
+Ach Economy hides both behind a single `Economy` facade, exposing only two things to you: the **`EconomyConfig` struct and the `Economy` class**.
+
+## Key features
+
+| Feature | Description |
+|---|---|
+| **Short/long price split** | Short-term price reacts per trade; long-term converges each tick with symmetric inertia |
+| **Symmetric inertia** | Same speed up and down → blocks the "dump then buy next day" arbitrage exploit |
+| **Inter-node trade** | Stock equalizes between nodes linked by trade routes (automatic arbitrage simulation) |
+| **Production/consumption loop** | Recipes turn inputs into outputs, feeding the supply/demand numbers |
+| **source/sink metering** | `Inject`/`Consume` record faucet/drain to derive inflation pressure |
+
+## Installation
+
+In the Unity Package Manager, choose **Add package from git URL...** and enter the address below.
+
+```text
+https://github.com/achieveonepark/ach-economy.git
+```
+
+<Callout type="info">
+To pin a specific version, push a release tag and append it like `...ach-economy.git#1.0.0`. OpenUPM registration is not yet available.
+</Callout>
+
+Next, head to [Getting Started](/en/getting-started) to build your first economy.
