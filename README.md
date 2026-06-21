@@ -63,7 +63,7 @@ void Update() => economy.Tick(Time.deltaTime);
 
 ## 문서
 
-전체 API와 가이드는 문서 사이트를 참고하세요. (`docs/` — fumadocs)
+전체 API와 가이드는 문서 사이트를 참고하세요. (`docs~/` — fumadocs)
 
 ## 라이선스
 

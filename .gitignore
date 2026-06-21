@@ -15,11 +15,11 @@
 Thumbs.db
 
 # Docs (fumadocs / Next.js)
-docs/node_modules/
-docs/.next/
-docs/out/
-docs/.source/
-docs/next-env.d.ts
+docs~/node_modules/
+docs~/.next/
+docs~/out/
+docs~/.source/
+docs~/next-env.d.ts
 *.tsbuildinfo
 
 # Local tooling
