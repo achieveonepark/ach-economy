@@ -1,0 +1,26 @@
+# Unity
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+*.csproj
+*.sln
+*.user
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Docs (fumadocs / Next.js)
+docs/node_modules/
+docs/.next/
+docs/out/
+docs/.source/
+docs/next-env.d.ts
+*.tsbuildinfo
+
+# Local tooling
+.claude/

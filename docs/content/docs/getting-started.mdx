@@ -1,0 +1,94 @@
+---
+title: 시작하기
+description: EconomyConfig로 첫 경제를 만들고 거래·생산·무역·인플레이션을 굴려봅니다
+---
+
+## 1. 경제 만들기
+
+사용자가 다루는 타입은 `EconomyConfig`(struct)와 `Economy`(class) 둘뿐입니다.
+
+```csharp
+using AchEconomy;
+
+// 기본값에서 필요한 것만 덮어쓴다.
+var config = EconomyConfig.Default;
+config.TickInterval = 2f;   // 2초마다 장기 틱
+config.PriceInertia = 0.2f;
+
+var economy = new Economy(config);
+```
+
+## 2. 상품과 시장 등록
+
+```csharp
+economy.AddCommodity("wheat", basePrice: 10f, targetStock: 100f, baseDemand: 5f);
+economy.AddCommodity("cloth", basePrice: 40f, targetStock: 30f);
+
+economy.AddMarket("village", new() { ["wheat"] = 250f });
+economy.AddMarket("town",    new() { ["wheat"] = 20f, ["cloth"] = 40f });
+```
+
+`basePrice`는 재고가 `targetStock`과 균형일 때의 가격입니다. 재고가 적정치보다 적으면 비싸지고, 많으면 싸집니다.
+
+## 3. 거래하기
+
+거래는 **재화의 이동**이라 인플레이션에 중립입니다.
+
+```csharp
+var r = economy.Buy("town", "cloth", 5f);
+// r.UnitPrice, r.TotalCost, r.StockAfter, r.Success
+
+float price = economy.GetPrice("town", "cloth");  // 재고가 줄어 약간 오른 값
+```
+
+<Callout type="info">
+재고가 모자라면 예외 대신 **부분 체결**됩니다. `r.Success`와 `r.Quantity`로 실제 체결량을 확인하세요.
+</Callout>
+
+## 4. 생산-소비 루프
+
+레시피는 장기 틱마다 입력 상품을 출력 상품으로 바꿉니다. 출력이 비면 순수 소비(인구가 식량을 먹는 등)가 됩니다.
+
+```csharp
+// 도시가 밀 3을 소비해 직물 1을 생산, 틱당 2회 가동
+economy.AddRecipe("town",
+    inputs:  new[] { ("wheat", 3f) },
+    outputs: new[] { ("cloth", 1f) },
+    throughput: 2f);
+```
+
+## 5. 거점 간 무역
+
+무역로로 연결된 노드 사이에서 재고가 평준화됩니다. 잉여 노드에서 부족 노드로 흐르며, AI 캐러밴의 재정거래를 모사합니다.
+
+```csharp
+economy.AddTradeRoute("village", "town");
+// 무역로를 끊으면(연결 안 함) 노드 간 가격이 튑니다 — 의도된 인과
+```
+
+## 6. 인플레이션 관리 (source / sink)
+
+재화가 **무에서 생성**되거나(faucet) **영구히 소멸**할 때(sink)만 알려주면, 인플레이션 보정은 내부에서 자동으로 일어납니다.
+
+```csharp
+economy.Inject("wheat", 100f, tag: "daily_quest"); // 퀘스트 보상 = faucet
+economy.Consume("wheat", 30f, tag: "crafting");    // 제작 소모 = sink
+
+// 알고 싶을 때만 구독 (무시해도 됨)
+economy.OnInflationAlert += (commodity, pressure) =>
+    Debug.Log($"{commodity} 인플레 압력 {pressure:P0}");
+```
+
+## 7. 시간 진행
+
+```csharp
+void Update() => economy.Tick(Time.deltaTime);
+```
+
+<Callout type="warn">
+멀티플레이(락스텝/Quantum 등)에서 결정성이 필요하면 **수동 `Tick` + 방정식 기반**을 쓰세요. `Tick`은 같은 입력에 같은 결과를 냅니다.
+</Callout>
+
+자동 틱이 편하면 `new Economy(config, autoTick: true)`로 두면 숨은 러너가 매 프레임 `Tick`을 호출합니다. 이 경우 종료 시 `economy.Dispose()`로 러너를 정리하세요.
+
+전체 API는 [API 문서](/ko/api)를 참고하세요.

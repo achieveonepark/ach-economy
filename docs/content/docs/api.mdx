@@ -1,0 +1,108 @@
+---
+title: API
+description: Economy 클래스와 EconomyConfig struct의 전체 레퍼런스
+---
+
+## EconomyConfig
+
+모든 튜닝 값을 담는 값 타입. `EconomyConfig.Default`에서 필요한 필드만 덮어쓰세요.
+
+| 필드 | 기본값 | 설명 |
+|---|---|---|
+| `TickInterval` | `1` | 장기 틱 1회가 도는 시뮬레이션 시간(초) |
+| `PriceInertia` | `0.15` | 장기 가격이 목표로 수렴하는 속도(0~1). **대칭 관성** |
+| `DemandWeight` | `1` | 가격 공식의 수요 성분 가중치 |
+| `ShortTermResponse` | `0.5` | 거래 한 건이 단기 가격을 끌어당기는 강도(0~1) |
+| `ShortTermDecay` | `0.25` | 단기 가격이 장기 가격으로 평균 회귀하는 강도(0~1) |
+| `InflationSensitivity` | `0.1` | source/sink 압력이 인플레 배수를 움직이는 민감도. 0이면 끔 |
+| `MinPriceMultiplier` | `0.25` | 최종 가격 배수 하한 |
+| `MaxPriceMultiplier` | `4` | 최종 가격 배수 상한 |
+| `InflationAlertThreshold` | `0.2` | 이 절대 압력을 넘으면 `OnInflationAlert` 발생 |
+| `TradeFlowRate` | `0.1` | 틱마다 잉여→부족 노드로 이동하는 재고 비율(0~1). 0이면 끔 |
+
+## Economy
+
+동적 경제의 유일한 진입점(Facade).
+
+### 생성
+
+```csharp
+Economy(EconomyConfig config, bool autoTick = false)
+```
+
+`autoTick`이 true면 숨은 러너가 매 프레임 `Tick`을 호출합니다. 종료 시 `Dispose()` 필요.
+
+### 등록
+
+| 메서드 | 설명 |
+|---|---|
+| `AddCommodity(id, basePrice, targetStock, baseDemand = 0)` | 상품 정의 등록 |
+| `AddMarket(id, initialStock = null)` | 시장(노드) 등록. 초기 재고 지정 가능 |
+| `AddRecipe(marketId, inputs, outputs, throughput = 1)` | 생산/소비 레시피. `outputs`가 비면 순수 소비 |
+| `AddTradeRoute(marketA, marketB)` | 두 노드를 무역로로 연결 |
+
+### 거래 (인플레이션 중립)
+
+| 메서드 | 반환 | 설명 |
+|---|---|---|
+| `Buy(marketId, commodityId, quantity)` | `TradeResult` | 플레이어가 사들임. 재고 부족 시 부분 체결 |
+| `Sell(marketId, commodityId, quantity)` | `TradeResult` | 플레이어가 내다 팖 |
+
+### source / sink (인플레이션 유발)
+
+| 메서드 | 설명 |
+|---|---|
+| `Inject(commodityId, amount, tag = null)` | 재화가 무에서 생성됨(faucet). `tag`는 텔레메트리용 라벨 |
+| `Consume(commodityId, amount, tag = null)` | 재화가 영구 소멸됨(sink) |
+
+### 조회
+
+| 메서드 | 반환 | 설명 |
+|---|---|---|
+| `GetPrice(marketId, commodityId)` | `float` | 현재 단가(수급·인플레 배수 반영) |
+| `GetStock(marketId, commodityId)` | `float` | 현재 재고 |
+| `GetInflationMultiplier(commodityId)` | `float` | 전역 인플레 배수(1=중립, &lt;1 과잉, &gt;1 희소) |
+| `GetSinkFaucetRatio(commodityId)` | `float` | sink/faucet 비율. 1보다 크면 sink 우세 |
+
+### 틱
+
+```csharp
+void Tick(float deltaTime)
+```
+
+누적 시간이 `TickInterval`에 도달할 때마다 장기 틱(생산 → 무역 → 가격 수렴 → 인플레 갱신)을 돌립니다.
+
+### 이벤트
+
+| 이벤트 | 시그니처 | 발생 시점 |
+|---|---|---|
+| `OnPriceChanged` | `(market, commodity, newPrice)` | 단가 갱신 |
+| `OnStockChanged` | `(market, commodity, newStock)` | 재고 변동 |
+| `OnTradeExecuted` | `(TradeResult)` | 거래 체결 |
+| `OnInflationAlert` | `(commodity, pressure)` | 압력이 임계값 초과 |
+| `OnDailyTick` | `()` | 장기 틱 1회 완료 |
+
+## TradeResult
+
+`Buy`/`Sell`의 결과. 실패해도 예외 없이 `Success == false`로 돌아옵니다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `Success` | `bool` | 체결 여부 |
+| `Market` / `Commodity` | `string` | 대상 노드/상품 id |
+| `Quantity` | `float` | 실제 체결 수량 |
+| `UnitPrice` | `float` | 체결 단가 |
+| `TotalCost` | `float` | 총액 |
+| `StockAfter` | `float` | 거래 후 재고 |
+| `Reason` | `string` | 실패 사유(성공 시 빈 문자열) |
+
+## 가격 공식
+
+```text
+균형 배수 = (적정재고 + 수요 + 1) / (현재재고 + 수요 + 1)
+최종 가격 = 기준가 × clamp(단기배수 × 인플레배수, Min, Max)
+```
+
+- **단기 배수**: 거래마다 `ShortTermResponse`만큼 균형치로 즉시 이동
+- **장기 배수**: 틱마다 `PriceInertia`만큼 균형치로 대칭 수렴, 단기는 장기로 평균 회귀
+- **인플레 배수**: source/sink 순압력으로 갱신 — 순 생성이면 1 미만(싸짐), 순 소멸이면 1 초과(비싸짐)

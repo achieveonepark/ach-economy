@@ -1,0 +1,20 @@
+---
+title: 변경 내역
+description: Ach Economy의 버전별 주요 변경 사항
+---
+
+이 프로젝트의 주요 변경 사항을 기록합니다. 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.0.0/)를 따르며, 버전은 [Semantic Versioning](https://semver.org/lang/ko/)을 따릅니다.
+
+## [1.0.0] - 2026-06-21
+
+### Added
+
+- `Economy` 파사드: 가격 결정·무역·생산·인플레이션을 한 진입점으로 통합
+- `EconomyConfig` struct: 모든 튜닝 값을 값 타입 하나로 외부화
+- 공급-수요 가격 결정 — 단기/장기 분리, 대칭 관성으로 차익거래 익스플로잇 차단
+- 거점 간 무역 흐름 — 무역로 기반 재고 평준화
+- 생산-소비 루프 — 레시피로 입력을 출력으로 변환
+- source/sink 인플레이션 계측 — `Inject`/`Consume`, 인플레이션 배수·경보
+- 선택적 자동 틱 러너 (`autoTick: true`)
+- EditMode 테스트 (가격 공식 결정성·대칭 관성·인플레이션 압력)
+- 최소 사용 예제 (`Samples~/Basic Usage`)
