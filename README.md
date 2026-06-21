@@ -15,17 +15,14 @@ Ach Economy는 이 둘을 한 `Economy` 파사드 뒤로 숨기고, 사용자에
 
 ## 설치
 
-### Git URL
+Unity Package Manager에서 **Add package from git URL...** 를 선택하고 아래 주소를 입력하세요.
 
 ```text
-https://github.com/achieveonepark/ach-economy.git#1.0.0
+https://github.com/achieveonepark/ach-economy.git
 ```
 
-### OpenUPM
-
-```bash
-openupm add com.achieve.ach-economy
-```
+> 특정 버전을 고정하려면 릴리스 태그를 푸시한 뒤 `...ach-economy.git#1.0.0` 처럼 뒤에 태그를 붙이면 됩니다.
+> OpenUPM 등록은 아직 진행되지 않았습니다.
 
 ## 빠른 시작
 
